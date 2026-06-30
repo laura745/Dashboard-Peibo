@@ -305,13 +305,22 @@ def cargar_catalogo():
 
 @st.cache_data
 def cargar_json():
-    ruta = os.path.join(CARPETA, "datos_companyPEIBO_subsector.json")
-    if not os.path.exists(ruta): return []
-    with open(ruta, encoding="utf-8") as f: raw = json.load(f)
-    if isinstance(raw, list): return raw
-    for v in raw.values():
-        if isinstance(v, list): return v
-    return []
+    """
+    Carga el JSON de clientes. Prioriza el archivo de producción
+    (datos_companyPEIBO.json) y, si no existe, usa datos_ejemplo.json
+    para que el dashboard funcione recién clonado del repositorio.
+    """
+    for nombre in ("datos_companyPEIBO.json", "datos_ejemplo.json"):
+        ruta = os.path.join(CARPETA, nombre)
+        if os.path.exists(ruta):
+            with open(ruta, encoding="utf-8") as f:
+                raw = json.load(f)
+            if isinstance(raw, list):
+                return raw, nombre
+            for v in raw.values():
+                if isinstance(v, list):
+                    return v, nombre
+    return [], None
 
 @st.cache_data
 def build_df(clientes_json, cat_sec, cat_sub):
@@ -435,12 +444,17 @@ def generar_excel(clientes_json, cat_sec_items, cat_sub_items):
 # INIT
 # ══════════════════════════════════════════════════════════════════════════════
 
-cat_sec, cat_sub = cargar_catalogo()
-clientes_raw     = cargar_json()
+cat_sec, cat_sub        = cargar_catalogo()
+clientes_raw, fuente_dt = cargar_json()
 
 if not clientes_raw:
-    st.error("No se encontró `datos_companyPEIBO_subsector.json` o el archivo está vacío.")
+    st.error(
+        "No se encontró `datos_companyPEIBO.json` ni `datos_ejemplo.json` en esta carpeta, "
+        "o el archivo está vacío."
+    )
     st.stop()
+
+usando_datos_ejemplo = (fuente_dt == "datos_ejemplo.json")
 
 df   = build_df(json.dumps(clientes_raw), cat_sec, cat_sub)
 df_p = df[df["tipo_act"] == "Principal"].copy()
@@ -516,7 +530,7 @@ with st.sidebar:
     <div style="margin-top:28px;padding-top:14px;border-top:1px solid {C['border']};">
       <p style="font-size:.67rem;color:{C['text_lo']};line-height:1.6;margin:0;">
         Clasificación SCIAN 2023.<br>
-        Reemplazar <code style="color:{C['text_md']};">datos_companyPEIBO_subsector.json</code><br>
+        Reemplazar <code style="color:{C['text_md']};">datos_companyPEIBO.json</code><br>
         para actualizar datos.
       </p>
     </div>""", unsafe_allow_html=True)
@@ -531,6 +545,14 @@ st.markdown(f"""
   <p class="ph-eyebrow">Análisis de portafolio · SCIAN 2023</p>
   <h1 class="ph-title">Actividades Económicas — Peibo</h1>
 </div>""", unsafe_allow_html=True)
+
+if usando_datos_ejemplo:
+    st.warning(
+        "Mostrando **datos de ejemplo** (`datos_ejemplo.json`) — no se encontró el "
+        "archivo de producción `datos_companyPEIBO.json` en esta carpeta. "
+        "Coloca el archivo real junto al script para ver el portafolio verdadero.",
+        icon="⚠️",
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -583,7 +605,7 @@ with tab_resumen:
                          "a propósito para mantener la vista legible con muchos sectores.")
 
             top_n_sun = st.slider(
-                "Top N · Sectores en el sunburst", 3, min(10, n_sectores), min(8, n_sectores),
+                "Top N · Sectores en el sunburst", 3, min(15, n_sectores), min(8, n_sectores),
                 key="sl_sunburst",
                 help="Limita la jerarquía a los N sectores con más clientes; el resto se agrupa en \"Otros\"")
 
@@ -737,27 +759,29 @@ with tab_act:
     ds_div["lado_fuerte"] = ds_div.apply(
         lambda r: "principal" if r["Principal"] >= r["Secundaria"] else "secundaria", axis=1)
 
-    # El hallazgo de asimetría se calcula sobre TODO el portafolio, no solo el Top 15 visible
-    hacia_sec_full = ds_div[(ds_div["lado_fuerte"] == "secundaria") & (ds_div["Secundaria"] > 0)]
-    if not hacia_sec_full.empty:
-        top_asim = hacia_sec_full.sort_values("asimetria", ascending=False).iloc[0]
-        insight_txt = (
-            f"<b>{top_asim['sec_nom']}</b> es <b>{top_asim['asimetria']:.1f}x</b> más frecuente "
-            f"como actividad secundaria que como principal — posible señal de diversificación "
-            f"hacia ese sector."
-        )
-    else:
-        top_asim_row = ds_div.sort_values("asimetria", ascending=False).iloc[0]
-        insight_txt = (
-            f"Todos los sectores son más fuertes como actividad principal. "
-            f"El más asimétrico es <b>{top_asim_row['sec_nom']}</b> "
-            f"({top_asim_row['asimetria']:.1f}x)."
-        )
-
     # La gráfica muestra el Top 15 por volumen total — evita ruido de sectores residuales
     top_n_sectores_div = min(15, len(ds_div))
     ds_div_top = ds_div.sort_values("Total", ascending=False).head(top_n_sectores_div)
     n_sectores_ocultos = len(ds_div) - len(ds_div_top)
+
+    # El hallazgo de asimetría se calcula SOLO sobre los sectores visibles en la gráfica
+    # (el Top 15 por volumen) — así el insight siempre describe algo que el usuario puede
+    # verificar a simple vista, en vez de mencionar un sector residual que no está en pantalla.
+    hacia_sec_top = ds_div_top[(ds_div_top["lado_fuerte"] == "secundaria") & (ds_div_top["Secundaria"] > 0)]
+    if not hacia_sec_top.empty:
+        top_asim = hacia_sec_top.sort_values("asimetria", ascending=False).iloc[0]
+        insight_txt = (
+            f"Dentro del Top {top_n_sectores_div}, <b>{top_asim['sec_nom']}</b> es "
+            f"<b>{top_asim['asimetria']:.1f}x</b> más frecuente como actividad secundaria "
+            f"que como principal — posible señal de diversificación hacia ese sector."
+        )
+    else:
+        top_asim_row = ds_div_top.sort_values("asimetria", ascending=False).iloc[0]
+        insight_txt = (
+            f"Dentro del Top {top_n_sectores_div}, todos los sectores son más fuertes "
+            f"como actividad principal. El más asimétrico es "
+            f"<b>{top_asim_row['sec_nom']}</b> ({top_asim_row['asimetria']:.1f}x)."
+        )
 
     max_lado = max(ds_div_top["Principal"].max(), ds_div_top["Secundaria"].max(), 1)
 
