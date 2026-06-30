@@ -507,7 +507,7 @@ with st.sidebar:
                 unsafe_allow_html=True)
 
     top_n_ppal = st.slider(
-        "Top N · Subsectores principales", 5, min(20, len(db_global)), 15,
+        "Top N · Subsectores principales", 5, min(50, len(db_global)), 15,
         help="Controla el Pareto del resumen y la vista de actividad principal")
 
     top_n_sec = 15
@@ -544,6 +544,8 @@ st.markdown(f"""
 <div class="ph-wrap">
   <p class="ph-eyebrow">Análisis de portafolio · SCIAN 2023</p>
   <h1 class="ph-title">Actividades Económicas — Peibo</h1>
+  <p class="ph-sub">Clasificación industrial del portafolio de clientes según el
+  Sistema de Clasificación Industrial de América del Norte.</p>
 </div>""", unsafe_allow_html=True)
 
 if usando_datos_ejemplo:
@@ -1007,7 +1009,7 @@ with tab_div:
                 f"Filas = clientes con más actividad dentro de los {len(universo_subs)} "
                 "subsectores que participan en combinaciones (abajo). "
                 "Columnas = esos mismos subsectores.",
-                "Color más claro = mayor % de participación de esa actividad para el cliente",
+                "Color más intenso y número en la celda = mayor % de participación de esa actividad para el cliente",
             )
 
             heat_df = df_universe[df_universe["cliente"].isin(clientes_relevantes)]
@@ -1024,24 +1026,49 @@ with tab_div:
             sub_nom_map = dict(zip(df_universe["sub_cod"], df_universe["sub_nom"]))
             col_labels = [f"{c} · {sub_nom_map.get(c,'')[:18]}" for c in pivot.columns]
 
+            # zmax dinámico: usa el valor máximo real (con piso de 1) en vez de fijarlo
+            # siempre en 100 — así el rango de color se ajusta a la dispersión real del dato
+            # y no se "aplana" cuando la mayoría de celdas caen en un rango bajo-medio.
+            z_vals = pivot.values
+            z_max_real = max(float(z_vals.max()), 1.0)
+
+            # Texto en cada celda: el número exacto, vacío si es 0 para no ensuciar la vista.
+            # go.Heatmap solo admite un color de texto único (no matriz por celda), así que
+            # la escala de color está calibrada para que blanco se lea bien en todo el rango
+            # donde hay texto (es decir, donde el valor es > 0).
+            text_vals = [[f"{v:.0f}" if v > 0 else "" for v in row] for row in z_vals]
+
             fig_heat = go.Figure(go.Heatmap(
-                z=pivot.values,
+                z=z_vals,
                 x=col_labels,
                 y=cliente_labels,
-                colorscale=[[0, C["surface2"]], [0.4, C["blue_dim"]], [0.75, C["blue_mid"]], [1, C["blue"]]],
-                zmin=0, zmax=100,
+                # Escala redistribuida y más saturada: el primer punto >0 ya entra con
+                # color sólido (no se mezcla con el fondo), y la transición hacia el azul
+                # más intenso ocurre en un rango más amplio para que se note la diferencia
+                # entre 20%, 50% y 90% en vez de comprimirse al final.
+                colorscale=[
+                    [0.0,  C["surface2"]],
+                    [0.001, C["indigo_mid"]],
+                    [0.35, C["blue_mid"]],
+                    [0.7,  C["blue"]],
+                    [1.0,  "#A8C5FF"],
+                ],
+                zmin=0, zmax=z_max_real,
+                text=text_vals,
+                texttemplate="%{text}",
+                textfont=dict(size=11, color="#FFFFFF"),
                 hovertemplate="<b>%{y}</b><br>%{x}<br>Participación: <b>%{z:.0f}%</b><extra></extra>",
                 colorbar=dict(
                     title=dict(text="% Actividad", font=dict(color=C["text_md"], size=10)),
                     tickfont=dict(color=C["text_md"], size=9),
                     len=0.7, thickness=10,
                 ),
-                xgap=3, ygap=3,
+                xgap=4, ygap=4,
             ))
             lay(fig_heat,
                 xaxis=dict(tickfont=dict(size=9, color=C["text_md"]), tickangle=-20, side="bottom"),
                 yaxis=dict(tickfont=dict(size=10, color=C["text_md"]), autorange="reversed"),
-                height=max(260, len(cliente_labels)*36+80))
+                height=max(260, len(cliente_labels)*38+80))
             pch(fig_heat)
 
         st.markdown(
