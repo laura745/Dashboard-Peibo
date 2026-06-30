@@ -507,7 +507,7 @@ with st.sidebar:
                 unsafe_allow_html=True)
 
     top_n_ppal = st.slider(
-        "Top N · Subsectores principales", 5, min(50, len(db_global)), 15,
+        "Top N · Subsectores principales", 5, min(20, len(db_global)), 15,
         help="Controla el Pareto del resumen y la vista de actividad principal")
 
     top_n_sec = 15
@@ -544,8 +544,6 @@ st.markdown(f"""
 <div class="ph-wrap">
   <p class="ph-eyebrow">Análisis de portafolio · SCIAN 2023</p>
   <h1 class="ph-title">Actividades Económicas — Peibo</h1>
-  <p class="ph-sub">Clasificación industrial del portafolio de clientes según el
-  Sistema de Clasificación Industrial de América del Norte.</p>
 </div>""", unsafe_allow_html=True)
 
 if usando_datos_ejemplo:
@@ -607,7 +605,7 @@ with tab_resumen:
                          "a propósito para mantener la vista legible con muchos sectores.")
 
             top_n_sun = st.slider(
-                "Top N · Sectores en el sunburst", 3, min(15, n_sectores), min(8, n_sectores),
+                "Top N · Sectores en el sunburst", 3, min(10, n_sectores), min(8, n_sectores),
                 key="sl_sunburst",
                 help="Limita la jerarquía a los N sectores con más clientes; el resto se agrupa en \"Otros\"")
 
