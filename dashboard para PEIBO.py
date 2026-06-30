@@ -530,8 +530,6 @@ st.markdown(f"""
 <div class="ph-wrap">
   <p class="ph-eyebrow">Análisis de portafolio · SCIAN 2023</p>
   <h1 class="ph-title">Actividades Económicas — Peibo</h1>
-  <p class="ph-sub">Clasificación industrial del portafolio de clientes según el
-  Sistema de Clasificación Industrial de América del Norte.</p>
 </div>""", unsafe_allow_html=True)
 
 
@@ -585,7 +583,7 @@ with tab_resumen:
                          "a propósito para mantener la vista legible con muchos sectores.")
 
             top_n_sun = st.slider(
-                "Top N · Sectores en el sunburst", 3, min(15, n_sectores), min(8, n_sectores),
+                "Top N · Sectores en el sunburst", 3, min(10, n_sectores), min(8, n_sectores),
                 key="sl_sunburst",
                 help="Limita la jerarquía a los N sectores con más clientes; el resto se agrupa en \"Otros\"")
 
