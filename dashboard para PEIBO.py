@@ -493,14 +493,14 @@ with st.sidebar:
                 unsafe_allow_html=True)
 
     top_n_ppal = st.slider(
-        "Top N · Subsectores principales", 5, min(50, len(db_global)), 15,
+        "Top N · Subsectores principales", 5, min(20, len(db_global)), 15,
         help="Controla el Pareto del resumen y la vista de actividad principal")
 
     top_n_sec = 15
     if not df_s.empty:
         db2_len = df_s.groupby("sub_cod")["cliente"].nunique().shape[0]
         top_n_sec = st.slider(
-            "Top N · Subsectores secundarios", 5, min(30, db2_len), min(12, db2_len))
+            "Top N · Subsectores secundarios", 5, min(20, db2_len), min(12, db2_len))
 
     st.markdown(f'<p style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;'
                 f'color:{C["text_lo"]};margin:20px 0 8px 0;">Exportar</p>',
@@ -725,6 +725,7 @@ with tab_act:
     ds_div = ds_p.merge(ds_s[["sec_cod","Secundaria"]], on="sec_cod", how="left")
     ds_div["Secundaria"] = ds_div["Secundaria"].fillna(0).astype(int)
     ds_div["sec_label"]  = ds_div["sec_cod"] + " " + ds_div["sec_nom"]
+    ds_div["Total"]      = ds_div["Principal"] + ds_div["Secundaria"]
 
     # índice de asimetría: ratio entre el lado dominante y el lado menor (mín 1 para evitar /0)
     def asim_ratio(row):
@@ -737,34 +738,38 @@ with tab_act:
     ds_div["asimetria"] = ds_div.apply(asim_ratio, axis=1)
     ds_div["lado_fuerte"] = ds_div.apply(
         lambda r: "principal" if r["Principal"] >= r["Secundaria"] else "secundaria", axis=1)
-    ds_div = ds_div.sort_values("asimetria", ascending=False)
 
-    max_lado = max(ds_div["Principal"].max(), ds_div["Secundaria"].max(), 1)
-
-    # Hallazgo automático — sector más asimétrico hacia secundaria (si existe)
-    hacia_sec = ds_div[(ds_div["lado_fuerte"] == "secundaria") & (ds_div["Secundaria"] > 0)]
-    if not hacia_sec.empty:
-        top_asim = hacia_sec.iloc[0]
+    # El hallazgo de asimetría se calcula sobre TODO el portafolio, no solo el Top 15 visible
+    hacia_sec_full = ds_div[(ds_div["lado_fuerte"] == "secundaria") & (ds_div["Secundaria"] > 0)]
+    if not hacia_sec_full.empty:
+        top_asim = hacia_sec_full.sort_values("asimetria", ascending=False).iloc[0]
         insight_txt = (
             f"<b>{top_asim['sec_nom']}</b> es <b>{top_asim['asimetria']:.1f}x</b> más frecuente "
             f"como actividad secundaria que como principal — posible señal de diversificación "
             f"hacia ese sector."
         )
     else:
-        top_asim_row = ds_div.iloc[0]
+        top_asim_row = ds_div.sort_values("asimetria", ascending=False).iloc[0]
         insight_txt = (
             f"Todos los sectores son más fuertes como actividad principal. "
             f"El más asimétrico es <b>{top_asim_row['sec_nom']}</b> "
             f"({top_asim_row['asimetria']:.1f}x)."
         )
 
+    # La gráfica muestra el Top 15 por volumen total — evita ruido de sectores residuales
+    top_n_sectores_div = min(15, len(ds_div))
+    ds_div_top = ds_div.sort_values("Total", ascending=False).head(top_n_sectores_div)
+    n_sectores_ocultos = len(ds_div) - len(ds_div_top)
+
+    max_lado = max(ds_div_top["Principal"].max(), ds_div_top["Secundaria"].max(), 1)
+
     with chart_card():
         chart_header(
-            "Sectores: principal vs secundaria",
+            f"Top {top_n_sectores_div} sectores: principal vs secundaria",
             "Cada fila es un sector. La barra <em>azul</em> (derecha) muestra cuántos clientes "
             "tienen ese sector como su actividad principal. La barra <i>índigo</i> (izquierda) "
             "muestra cuántos lo tienen como secundaria.",
-            "Ordenado por índice de asimetría — pasa el mouse sobre un segmento para ver el detalle exacto",
+            "Ordenado por volumen total (principal + secundaria) — pasa el mouse sobre un segmento para ver el detalle exacto",
         )
 
         legend_row([("Actividad principal", C["blue"]), ("Actividad secundaria", C["indigo"])])
@@ -773,34 +778,41 @@ with tab_act:
         <div class="insight-box">{insight_txt}</div>
         """, unsafe_allow_html=True)
 
-        cats_div = ds_div["sec_label"].tolist()
+        if n_sectores_ocultos > 0:
+            st.caption(
+                f"Mostrando los {top_n_sectores_div} sectores con mayor volumen. "
+                f"{n_sectores_ocultos} sectores adicionales con menor actividad no se muestran "
+                f"aquí — consulta la tabla de detalle en el Resumen para verlos todos."
+            )
+
+        cats_div = ds_div_top["sec_label"].tolist()
 
         fig_div = go.Figure()
         fig_div.add_trace(go.Bar(
-            x=-ds_div["Secundaria"], y=cats_div, orientation="h", name="Secundaria",
+            x=-ds_div_top["Secundaria"], y=cats_div, orientation="h", name="Secundaria",
             marker=dict(color=C["indigo"], line=dict(width=0)),
-            customdata=list(zip(ds_div["sec_nom"], ds_div["Secundaria"], ds_div["Principal"])),
+            customdata=list(zip(ds_div_top["sec_nom"], ds_div_top["Secundaria"], ds_div_top["Principal"])),
             hovertemplate=(
                 "<b>%{customdata[0]}</b><br>"
                 "Como secundaria: <b>%{customdata[1]}</b> clientes<br>"
                 "Como principal: %{customdata[2]} clientes"
                 "<extra></extra>"
             ),
-            text=ds_div["Secundaria"].astype(str),
+            text=ds_div_top["Secundaria"].astype(str),
             textposition="outside",
             textfont=dict(color=C["text_lo"], size=10),
         ))
         fig_div.add_trace(go.Bar(
-            x=ds_div["Principal"], y=cats_div, orientation="h", name="Principal",
+            x=ds_div_top["Principal"], y=cats_div, orientation="h", name="Principal",
             marker=dict(color=C["blue"], line=dict(width=0)),
-            customdata=list(zip(ds_div["sec_nom"], ds_div["Principal"], ds_div["Secundaria"])),
+            customdata=list(zip(ds_div_top["sec_nom"], ds_div_top["Principal"], ds_div_top["Secundaria"])),
             hovertemplate=(
                 "<b>%{customdata[0]}</b><br>"
                 "Como principal: <b>%{customdata[1]}</b> clientes<br>"
                 "Como secundaria: %{customdata[2]} clientes"
                 "<extra></extra>"
             ),
-            text=ds_div["Principal"].astype(str),
+            text=ds_div_top["Principal"].astype(str),
             textposition="outside",
             textfont=dict(color=C["text_lo"], size=10),
         ))
@@ -816,7 +828,7 @@ with tab_act:
             yaxis=dict(type="category", categoryorder="array", categoryarray=cats_div[::-1],
                        **GR, tickfont=dict(size=10, color=C["text_md"])),
             showlegend=False,
-            height=max(320, len(ds_div)*42+90))
+            height=max(320, len(ds_div_top)*42+90))
         pch(fig_div)
 
     hr()
@@ -910,7 +922,7 @@ with tab_div:
     with col_h:
         with chart_card():
             top_n_div_quick = st.slider(
-                "Top N · Clientes más diversificados", 5, min(30, len(div_df)), min(12, len(div_df)),
+                "Top N · Clientes más diversificados", 5, min(20, len(div_df)), min(12, len(div_df)),
                 key="sl_topdiv", help="Cantidad de clientes a mostrar en el ranking")
 
             top_div = (div_df.sort_values("total_act", ascending=False)
