@@ -307,10 +307,10 @@ def cargar_catalogo():
 def cargar_json():
     """
     Carga el JSON de clientes. Prioriza el archivo de producción
-    (datos_companyPEIBO.json) y, si no existe, usa datos_ejemplo.json
+    (datos_companyPEIBO_subsector.json) y, si no existe, usa datos_ejemplo.json
     para que el dashboard funcione recién clonado del repositorio.
     """
-    for nombre in ("datos_companyPEIBO.json", "datos_ejemplo.json"):
+    for nombre in ("datos_companyPEIBO_subsector.json", "datos_ejemplo.json"):
         ruta = os.path.join(CARPETA, nombre)
         if os.path.exists(ruta):
             with open(ruta, encoding="utf-8") as f:
@@ -449,7 +449,7 @@ clientes_raw, fuente_dt = cargar_json()
 
 if not clientes_raw:
     st.error(
-        "No se encontró `datos_companyPEIBO.json` ni `datos_ejemplo.json` en esta carpeta, "
+        "No se encontró `datos_companyPEIBO_subsector.json` ni `datos_ejemplo.json` en esta carpeta, "
         "o el archivo está vacío."
     )
     st.stop()
@@ -530,7 +530,7 @@ with st.sidebar:
     <div style="margin-top:28px;padding-top:14px;border-top:1px solid {C['border']};">
       <p style="font-size:.67rem;color:{C['text_lo']};line-height:1.6;margin:0;">
         Clasificación SCIAN 2023.<br>
-        Reemplazar <code style="color:{C['text_md']};">datos_companyPEIBO.json</code><br>
+        Reemplazar <code style="color:{C['text_md']};">datos_companyPEIBO_subsector.json</code><br>
         para actualizar datos.
       </p>
     </div>""", unsafe_allow_html=True)
@@ -549,7 +549,7 @@ st.markdown(f"""
 if usando_datos_ejemplo:
     st.warning(
         "Mostrando **datos de ejemplo** (`datos_ejemplo.json`) — no se encontró el "
-        "archivo de producción `datos_companyPEIBO.json` en esta carpeta. "
+        "archivo de producción `datos_companyPEIBO_subsector.json` en esta carpeta. "
         "Coloca el archivo real junto al script para ver el portafolio verdadero.",
         icon="⚠️",
     )
