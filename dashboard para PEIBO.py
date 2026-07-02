@@ -307,10 +307,10 @@ def cargar_catalogo():
 def cargar_json():
     """
     Carga el JSON de clientes. Prioriza el archivo de producción
-    (datos_companyPEIBO_subsector.json) y, si no existe, usa datos_ejemplo.json
+    (datos_companyPEIBO.json) y, si no existe, usa datos_ejemplo.json
     para que el dashboard funcione recién clonado del repositorio.
     """
-    for nombre in ("datos_companyPEIBO_subsector.json", "datos_ejemplo.json"):
+    for nombre in ("datos_companyPEIBO.json", "datos_ejemplo.json"):
         ruta = os.path.join(CARPETA, nombre)
         if os.path.exists(ruta):
             with open(ruta, encoding="utf-8") as f:
@@ -449,7 +449,7 @@ clientes_raw, fuente_dt = cargar_json()
 
 if not clientes_raw:
     st.error(
-        "No se encontró `datos_companyPEIBO_subsector.json` ni `datos_ejemplo.json` en esta carpeta, "
+        "No se encontró `datos_companyPEIBO.json` ni `datos_ejemplo.json` en esta carpeta, "
         "o el archivo está vacío."
     )
     st.stop()
@@ -507,7 +507,7 @@ with st.sidebar:
                 unsafe_allow_html=True)
 
     top_n_ppal = st.slider(
-        "Top N · Subsectores principales", 5, min(20, len(db_global)), 15,
+        "Top N · Subsectores principales", 5, min(50, len(db_global)), 15,
         help="Controla el Pareto del resumen y la vista de actividad principal")
 
     top_n_sec = 15
@@ -530,7 +530,7 @@ with st.sidebar:
     <div style="margin-top:28px;padding-top:14px;border-top:1px solid {C['border']};">
       <p style="font-size:.67rem;color:{C['text_lo']};line-height:1.6;margin:0;">
         Clasificación SCIAN 2023.<br>
-        Reemplazar <code style="color:{C['text_md']};">datos_companyPEIBO_subsector.json</code><br>
+        Reemplazar <code style="color:{C['text_md']};">datos_companyPEIBO.json</code><br>
         para actualizar datos.
       </p>
     </div>""", unsafe_allow_html=True)
@@ -544,12 +544,14 @@ st.markdown(f"""
 <div class="ph-wrap">
   <p class="ph-eyebrow">Análisis de portafolio · SCIAN 2023</p>
   <h1 class="ph-title">Actividades Económicas — Peibo</h1>
+  <p class="ph-sub">Clasificación industrial del portafolio de clientes según el
+  Sistema de Clasificación Industrial de América del Norte.</p>
 </div>""", unsafe_allow_html=True)
 
 if usando_datos_ejemplo:
     st.warning(
         "Mostrando **datos de ejemplo** (`datos_ejemplo.json`) — no se encontró el "
-        "archivo de producción `datos_companyPEIBO_subsector.json` en esta carpeta. "
+        "archivo de producción `datos_companyPEIBO.json` en esta carpeta. "
         "Coloca el archivo real junto al script para ver el portafolio verdadero.",
         icon="⚠️",
     )
@@ -595,7 +597,7 @@ with tab_resumen:
         "Vista panorámica del portafolio: composición por sector/subsector y "
         "qué tan concentrada está la actividad económica en pocos subsectores.")
 
-    col_sun, col_par = st.columns([1, 1.15])
+    col_sun, col_tm, col_par = st.columns([1, 1, 1.15])
 
     with col_sun:
         with chart_card():
@@ -605,7 +607,7 @@ with tab_resumen:
                          "a propósito para mantener la vista legible con muchos sectores.")
 
             top_n_sun = st.slider(
-                "Top N · Sectores en el sunburst", 3, min(10, n_sectores), min(8, n_sectores),
+                "Top N · Sectores en el sunburst", 3, min(15, n_sectores), min(8, n_sectores),
                 key="sl_sunburst",
                 help="Limita la jerarquía a los N sectores con más clientes; el resto se agrupa en \"Otros\"")
 
@@ -658,6 +660,49 @@ with tab_resumen:
                     f"con {int(sun_rest['n_clientes'].sum()):,} clientes en total — "
                     f"aumenta el Top N para verlos desagregados."
                 )
+
+    with col_tm:
+        with chart_card():
+            chart_header("Mapa de proporciones",
+                         "Área de cada bloque = peso relativo del sector. "
+                         "Color más intenso = más clientes.")
+
+            ds_tm = (df_p.groupby(["sec_cod","sec_nom"]).size()
+                     .reset_index(name="Clientes").sort_values("Clientes", ascending=False))
+            ds_tm["pct"]   = (ds_tm["Clientes"] / TOT * 100).round(1)
+            ds_tm["label"] = ds_tm["sec_cod"] + "  " + ds_tm["sec_nom"]
+
+            fig_tm = px.treemap(
+                ds_tm, path=["label"], values="Clientes", color="Clientes",
+                color_continuous_scale=[
+                    [0.0, C["surface2"]],
+                    [0.2, C["blue_dim"]],
+                    [0.5, C["blue_mid"]],
+                    [1.0, C["blue"]],
+                ],
+                custom_data=["sec_cod", "sec_nom", "pct"],
+            )
+            fig_tm.update_traces(
+                texttemplate=(
+                    "<b>%{customdata[0]}</b><br>"
+                    "%{customdata[1]}<br>"
+                    "%{value:,} · %{customdata[2]}%"
+                ),
+                hovertemplate=(
+                    "<b>%{customdata[0]} — %{customdata[1]}</b><br>"
+                    "Clientes: <b>%{value:,}</b><br>"
+                    "Participación: <b>%{customdata[2]}%</b>"
+                    "<extra></extra>"
+                ),
+                textfont=dict(color="white", size=11),
+                marker_line_width=3,
+                marker_line_color=C["bg"],
+            )
+            lay(fig_tm,
+                coloraxis_showscale=False,
+                margin=dict(l=4, r=4, t=4, b=4),
+                height=380)
+            pch(fig_tm)
 
     with col_par:
         with chart_card():
