@@ -307,10 +307,10 @@ def cargar_catalogo():
 def cargar_json():
     """
     Carga el JSON de clientes. Prioriza el archivo de producción
-    (datos_companyPEIBO.json) y, si no existe, usa datos_ejemplo.json
+    (datos_companyPEIBO_subsector.json) y, si no existe, usa datos_ejemplo.json
     para que el dashboard funcione recién clonado del repositorio.
     """
-    for nombre in ("datos_companyPEIBO.json", "datos_ejemplo.json"):
+    for nombre in ("datos_companyPEIBO_subsector.json", "datos_ejemplo.json"):
         ruta = os.path.join(CARPETA, nombre)
         if os.path.exists(ruta):
             with open(ruta, encoding="utf-8") as f:
@@ -449,7 +449,7 @@ clientes_raw, fuente_dt = cargar_json()
 
 if not clientes_raw:
     st.error(
-        "No se encontró `datos_companyPEIBO.json` ni `datos_ejemplo.json` en esta carpeta, "
+        "No se encontró `datos_companyPEIBO_subsector.json` ni `datos_ejemplo.json` en esta carpeta, "
         "o el archivo está vacío."
     )
     st.stop()
@@ -507,14 +507,14 @@ with st.sidebar:
                 unsafe_allow_html=True)
 
     top_n_ppal = st.slider(
-        "Top N · Subsectores principales", 5, min(50, len(db_global)), 15,
+        "Top N · Subsectores principales", 5, min(15, len(db_global)), 15,
         help="Controla el Pareto del resumen y la vista de actividad principal")
 
     top_n_sec = 15
     if not df_s.empty:
         db2_len = df_s.groupby("sub_cod")["cliente"].nunique().shape[0]
         top_n_sec = st.slider(
-            "Top N · Subsectores secundarios", 5, min(20, db2_len), min(12, db2_len))
+            "Top N · Subsectores secundarios", 5, min(15, db2_len), min(12, db2_len))
 
     st.markdown(f'<p style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;'
                 f'color:{C["text_lo"]};margin:20px 0 8px 0;">Exportar</p>',
@@ -530,7 +530,7 @@ with st.sidebar:
     <div style="margin-top:28px;padding-top:14px;border-top:1px solid {C['border']};">
       <p style="font-size:.67rem;color:{C['text_lo']};line-height:1.6;margin:0;">
         Clasificación SCIAN 2023.<br>
-        Reemplazar <code style="color:{C['text_md']};">datos_companyPEIBO.json</code><br>
+        Reemplazar <code style="color:{C['text_md']};">datos_companyPEIBO_subsector.json</code><br>
         para actualizar datos.
       </p>
     </div>""", unsafe_allow_html=True)
@@ -544,14 +544,12 @@ st.markdown(f"""
 <div class="ph-wrap">
   <p class="ph-eyebrow">Análisis de portafolio · SCIAN 2023</p>
   <h1 class="ph-title">Actividades Económicas — Peibo</h1>
-  <p class="ph-sub">Clasificación industrial del portafolio de clientes según el
-  Sistema de Clasificación Industrial de América del Norte.</p>
 </div>""", unsafe_allow_html=True)
 
 if usando_datos_ejemplo:
     st.warning(
         "Mostrando **datos de ejemplo** (`datos_ejemplo.json`) — no se encontró el "
-        "archivo de producción `datos_companyPEIBO.json` en esta carpeta. "
+        "archivo de producción `datos_companyPEIBO_subsector.json` en esta carpeta. "
         "Coloca el archivo real junto al script para ver el portafolio verdadero.",
         icon="⚠️",
     )
